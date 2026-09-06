@@ -253,7 +253,6 @@
         throw new Error(data.error || 'Could not send code.');
       }
       currentToken = data.token;
-      if (data.phone) currentPhone = data.phone;
       sentTo.textContent = 'We sent a code to ' + currentPhone + '.';
       codeInputs.forEach(i => i.value = '');
       showScreen(screenCode);

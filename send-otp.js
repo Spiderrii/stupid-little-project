@@ -1,14 +1,10 @@
 const crypto = require('crypto');
+const nodemailer = require('nodemailer');
 
 const CODE_TTL_SECONDS = 5 * 60; // 5 minutes
 
-function toE164(raw) {
-  const digits = raw.replace(/\D/g, '');
-  if (digits.length === 10) return '+1' + digits;
-  if (digits.length === 11 && digits[0] === '1') return '+' + digits;
-  if (raw.trim().startsWith('+') && digits.length > 7) return '+' + digits;
-  return null;
-}
+// AT&T's email-to-SMS gateway. Change this if you switch carriers later.
+const CARRIER_GATEWAY = 'txt.att.net';
 
 // Builds a token that lets verify-otp check a submitted code against what
 // was actually texted, without the server storing the code anywhere.
@@ -31,45 +27,40 @@ module.exports = async (req, res) => {
     return;
   }
 
-  const normalizedPhone = toE164(phone);
-  if (!normalizedPhone) {
-    res.status(400).json({ error: 'Enter a valid US phone number, e.g. +1 555 010 1234.' });
-    return;
-  }
+  const { GMAIL_USER, GMAIL_APP_PASSWORD, OTP_SECRET } = process.env;
 
-  const { OTP_SECRET, TEXTBELT_KEY } = process.env;
-  if (!OTP_SECRET) {
+  if (!GMAIL_USER || !GMAIL_APP_PASSWORD || !OTP_SECRET) {
     res.status(500).json({ error: 'Server is missing required environment variables.' });
     return;
   }
 
-  const code = Math.floor(100000 + Math.random() * 900000).toString();
+  const digits = phone.replace(/\D/g, '').slice(-10); // last 10 digits, no +1/formatting
+  if (digits.length !== 10) {
+    res.status(400).json({ error: 'Enter a 10-digit US phone number.' });
+    return;
+  }
+  const gatewayAddress = `${digits}@${CARRIER_GATEWAY}`;
+
+  const code = Math.floor(100000 + Math.random() * 900000).toString(); // 6 digits
   const exp = Date.now() + CODE_TTL_SECONDS * 1000;
 
   try {
-    // 'textbelt' is a shared, no-signup key good for 1 free text per day
-    // per phone number. Set TEXTBELT_KEY as an env var later if you buy
-    // your own key for more volume — no code changes needed.
-    const resp = await fetch('https://textbelt.com/text', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        phone: normalizedPhone,
-        message: `Your verification code is ${code}. It expires in 5 minutes.`,
-        key: TEXTBELT_KEY || 'textbelt'
-      })
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: { user: GMAIL_USER, pass: GMAIL_APP_PASSWORD }
     });
-    const data = await resp.json();
-    if (!data.success) {
-      throw new Error(data.error || 'Textbelt could not send the message.');
-    }
+    await transporter.sendMail({
+      from: GMAIL_USER,
+      to: gatewayAddress,
+      subject: '', // carrier gateways usually ignore/strip this
+      text: `Your verification code is ${code}. It expires in 5 minutes.`
+    });
   } catch (err) {
     res.status(502).json({ error: 'Could not send the text: ' + (err.message || 'unknown error') });
     return;
   }
 
-  res.status(200).json({
-    token: buildToken(normalizedPhone, code, exp, OTP_SECRET),
-    phone: normalizedPhone
-  });
+  // The token encodes a hash of the code, not the code itself, so nothing
+  // secret is exposed to the browser.
+  res.status(200).json({ token: buildToken(phone, code, exp, OTP_SECRET) });
 };

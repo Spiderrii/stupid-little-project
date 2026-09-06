@@ -43,6 +43,7 @@ module.exports = (req, res) => {
     return;
   }
 
+  // Recompute the outer signature to make sure phone/exp/codeHash weren't tampered with.
   const expectedOuterSig = crypto
     .createHmac('sha256', OTP_SECRET)
     .update(`${tokenPhone}.${exp}.${codeHash}`)
@@ -52,6 +53,7 @@ module.exports = (req, res) => {
     return;
   }
 
+  // Recompute the code hash using the code the user just typed in.
   const expectedCodeHash = crypto
     .createHash('sha256')
     .update(`${phone}.${code}.${exp}.${OTP_SECRET}`)
