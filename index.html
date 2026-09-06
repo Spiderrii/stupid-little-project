@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Verify your number</title>
+<title>Verify your email</title>
 <style>
   :root {
     --bg: #ffffff;
@@ -58,7 +58,7 @@
     margin-bottom: 8px;
   }
 
-  input[type="tel"] {
+  input[type="email"] {
     width: 100%;
     border: 1px solid var(--border);
     background: var(--surface);
@@ -69,7 +69,7 @@
     font-family: inherit;
   }
 
-  input[type="tel"]:focus {
+  input[type="email"]:focus {
     border-color: var(--text);
   }
 
@@ -170,18 +170,18 @@
 
 <div class="card">
 
-  <div class="screen active fade-in" id="screenPhone">
-    <h1>Verify your number</h1>
-    <p class="sub">We'll text you a 6-digit code.</p>
-    <label for="phone">Phone number</label>
-    <input type="tel" id="phone" placeholder="+1 555 010 1234" autocomplete="tel">
+  <div class="screen active fade-in" id="screenEmail">
+    <h1>Verify your email</h1>
+    <p class="sub">We'll email you a 6-digit code.</p>
+    <label for="email">Email address</label>
+    <input type="email" id="email" placeholder="you@example.com" autocomplete="email">
     <button class="primary" id="sendBtn">Send code</button>
-    <div class="status" id="phoneStatus"></div>
+    <div class="status" id="emailStatus"></div>
   </div>
 
   <div class="screen" id="screenCode">
     <h1>Enter your code</h1>
-    <p class="sub" id="sentTo">We sent a code to your phone.</p>
+    <p class="sub" id="sentTo">We sent a code to your email.</p>
     <div class="code-row" id="codeRow">
       <input type="text" inputmode="numeric" maxlength="1">
       <input type="text" inputmode="numeric" maxlength="1">
@@ -193,7 +193,7 @@
     <button class="primary" id="verifyBtn">Verify</button>
     <div class="row-between">
       <button class="link-btn" id="resendBtn">Resend code</button>
-      <button class="link-btn" id="backBtn">Change number</button>
+      <button class="link-btn" id="backBtn">Change email</button>
     </div>
     <div class="status" id="codeStatus"></div>
   </div>
@@ -202,11 +202,11 @@
 
 <script>
 (function () {
-  const screenPhone = document.getElementById('screenPhone');
+  const screenEmail = document.getElementById('screenEmail');
   const screenCode = document.getElementById('screenCode');
-  const phoneInput = document.getElementById('phone');
+  const emailInput = document.getElementById('email');
   const sendBtn = document.getElementById('sendBtn');
-  const phoneStatus = document.getElementById('phoneStatus');
+  const emailStatus = document.getElementById('emailStatus');
   const sentTo = document.getElementById('sentTo');
   const codeInputs = Array.from(document.querySelectorAll('#codeRow input'));
   const verifyBtn = document.getElementById('verifyBtn');
@@ -214,13 +214,13 @@
   const backBtn = document.getElementById('backBtn');
   const codeStatus = document.getElementById('codeStatus');
 
-  let currentPhone = "";
+  let currentEmail = "";
   let currentToken = "";
   let resendCooldown = 0;
   let resendTimer = null;
 
   function showScreen(el) {
-    [screenPhone, screenCode].forEach(s => s.classList.remove('active', 'fade-in'));
+    [screenEmail, screenCode].forEach(s => s.classList.remove('active', 'fade-in'));
     el.classList.add('active', 'fade-in');
   }
 
@@ -230,37 +230,38 @@
   }
 
   async function sendCode(isResend) {
-    const phone = phoneInput.value.trim();
+    const email = emailInput.value.trim();
     if (!isResend) {
-      if (!phone) {
-        setStatus(phoneStatus, 'Enter a phone number.', 'error');
+      if (!email) {
+        setStatus(emailStatus, 'Enter an email address.', 'error');
         return;
       }
-      currentPhone = phone;
+      currentEmail = email;
     }
     sendBtn.disabled = true;
     resendBtn.disabled = true;
-    setStatus(phoneStatus, 'Sending...', null);
+    setStatus(emailStatus, 'Sending...', null);
     setStatus(codeStatus, '', null);
     try {
       const res = await fetch('/api/send-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: currentPhone })
+        body: JSON.stringify({ email: currentEmail })
       });
       const data = await res.json();
       if (!res.ok || !data.token) {
         throw new Error(data.error || 'Could not send code.');
       }
       currentToken = data.token;
-      sentTo.textContent = 'We sent a code to ' + currentPhone + '.';
+      if (data.email) currentEmail = data.email;
+      sentTo.textContent = 'We sent a code to ' + currentEmail + '.';
       codeInputs.forEach(i => i.value = '');
       showScreen(screenCode);
       codeInputs[0].focus();
       setStatus(codeStatus, '', null);
       startResendCooldown();
     } catch (err) {
-      setStatus(phoneStatus, err.message, 'error');
+      setStatus(emailStatus, err.message, 'error');
     } finally {
       sendBtn.disabled = false;
     }
@@ -288,10 +289,10 @@
   }
 
   sendBtn.addEventListener('click', () => sendCode(false));
-  phoneInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendCode(false); });
+  emailInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendCode(false); });
   resendBtn.addEventListener('click', () => { if (!resendBtn.disabled) sendCode(true); });
   backBtn.addEventListener('click', () => {
-    showScreen(screenPhone);
+    showScreen(screenEmail);
     setStatus(codeStatus, '', null);
   });
 
@@ -330,7 +331,7 @@
       const res = await fetch('/api/verify-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: currentPhone, code, token: currentToken })
+        body: JSON.stringify({ email: currentEmail, code, token: currentToken })
       });
       const data = await res.json();
       if (data.success) {

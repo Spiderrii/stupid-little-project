@@ -3,16 +3,11 @@ const nodemailer = require('nodemailer');
 
 const CODE_TTL_SECONDS = 5 * 60; // 5 minutes
 
-// AT&T's email-to-SMS gateway. Change this if you switch carriers later.
-const CARRIER_GATEWAY = 'txt.att.net';
-
-// Builds a token that lets verify-otp check a submitted code against what
-// was actually texted, without the server storing the code anywhere.
-function buildToken(phone, code, exp, secret) {
-  const codeHash = crypto.createHash('sha256').update(`${phone}.${code}.${exp}.${secret}`).digest('hex');
-  const payload = `${phone}.${exp}.${codeHash}`;
+function buildToken(email, code, exp, secret) {
+  const codeHash = crypto.createHash('sha256').update(`${email}.${code}.${exp}.${secret}`).digest('hex');
+  const payload = `${email}.${exp}.${codeHash}`;
   const outerSig = crypto.createHmac('sha256', secret).update(payload).digest('hex');
-  return Buffer.from(`${phone}.${exp}.${codeHash}.${outerSig}`).toString('base64url');
+  return Buffer.from(`${email}.${exp}.${codeHash}.${outerSig}`).toString('base64url');
 }
 
 module.exports = async (req, res) => {
@@ -21,27 +16,19 @@ module.exports = async (req, res) => {
     return;
   }
 
-  const { phone } = req.body || {};
-  if (!phone || typeof phone !== 'string') {
-    res.status(400).json({ error: 'Phone number is required.' });
+  const { email } = req.body || {};
+  if (!email || typeof email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    res.status(400).json({ error: 'Enter a valid email address.' });
     return;
   }
 
   const { GMAIL_USER, GMAIL_APP_PASSWORD, OTP_SECRET } = process.env;
-
   if (!GMAIL_USER || !GMAIL_APP_PASSWORD || !OTP_SECRET) {
     res.status(500).json({ error: 'Server is missing required environment variables.' });
     return;
   }
 
-  const digits = phone.replace(/\D/g, '').slice(-10); // last 10 digits, no +1/formatting
-  if (digits.length !== 10) {
-    res.status(400).json({ error: 'Enter a 10-digit US phone number.' });
-    return;
-  }
-  const gatewayAddress = `${digits}@${CARRIER_GATEWAY}`;
-
-  const code = Math.floor(100000 + Math.random() * 900000).toString(); // 6 digits
+  const code = Math.floor(100000 + Math.random() * 900000).toString();
   const exp = Date.now() + CODE_TTL_SECONDS * 1000;
 
   try {
@@ -51,16 +38,17 @@ module.exports = async (req, res) => {
     });
     await transporter.sendMail({
       from: GMAIL_USER,
-      to: gatewayAddress,
-      subject: '', // carrier gateways usually ignore/strip this
+      to: email,
+      subject: 'Your verification code',
       text: `Your verification code is ${code}. It expires in 5 minutes.`
     });
   } catch (err) {
-    res.status(502).json({ error: 'Could not send the text: ' + (err.message || 'unknown error') });
+    res.status(502).json({ error: 'Could not send the email: ' + (err.message || 'unknown error') });
     return;
   }
 
-  // The token encodes a hash of the code, not the code itself, so nothing
-  // secret is exposed to the browser.
-  res.status(200).json({ token: buildToken(phone, code, exp, OTP_SECRET) });
+  res.status(200).json({
+    token: buildToken(email, code, exp, OTP_SECRET),
+    email
+  });
 };
