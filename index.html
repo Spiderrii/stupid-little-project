@@ -215,6 +215,7 @@
   const codeStatus = document.getElementById('codeStatus');
 
   let currentPhone = "";
+  let currentToken = "";
   let resendCooldown = 0;
   let resendTimer = null;
 
@@ -248,9 +249,10 @@
         body: JSON.stringify({ phone: currentPhone })
       });
       const data = await res.json();
-      if (!res.ok) {
+      if (!res.ok || !data.token) {
         throw new Error(data.error || 'Could not send code.');
       }
+      currentToken = data.token;
       if (data.phone) currentPhone = data.phone;
       sentTo.textContent = 'We sent a code to ' + currentPhone + '.';
       codeInputs.forEach(i => i.value = '');
@@ -329,7 +331,7 @@
       const res = await fetch('/api/verify-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: currentPhone, code })
+        body: JSON.stringify({ phone: currentPhone, code, token: currentToken })
       });
       const data = await res.json();
       if (data.success) {

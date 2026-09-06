@@ -2,7 +2,5 @@
   "name": "otp-page",
   "version": "1.0.0",
   "private": true,
-  "dependencies": {
-    "twilio": "^5.3.0"
-  }
+  "dependencies": {}
 }

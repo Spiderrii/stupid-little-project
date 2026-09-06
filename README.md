@@ -1,34 +1,17 @@
-# OTP page — setup (Twilio Verify)
+# OTP page — setup (Textbelt, no account needed)
 
 A minimal phone-verification page (`index.html`) plus two backend functions
-(`api/send-otp.js`, `api/verify-otp.js`) built on **Twilio Verify** — a
-Twilio product made specifically for one-time codes. It generates, sends,
-and checks the code for you, so there's no code-signing logic to maintain,
-and it isn't subject to the "custom message body" restriction that trial
-accounts hit on plain Programmable Messaging.
+(`api/send-otp.js`, `api/verify-otp.js`). Sending goes through Textbelt's
+free tier — no signup, no API key, no account of any kind. Verification
+works the same way it did before: the code is folded into a signed token
+handed back to the browser, so the server never has to store it anywhere.
 
-## 1. Create a Verify Service
+## What you actually need
 
-1. In the Twilio Console, go to Verify → Services.
-2. Click Create new Service, give it any friendly name (e.g. "otp-page").
-3. Copy the **Service SID** it gives you (starts with `VA...`) — this is
-   `TWILIO_VERIFY_SERVICE_SID`.
-4. From the main Console dashboard, also copy your **Account SID** and
-   **Auth Token**.
+Nothing to sign up for. The only thing you set yourself is `OTP_SECRET` —
+any random string you make up, used only to sign the token.
 
-You do NOT need to buy a phone number for this — Verify sends from its own
-infrastructure.
-
-## 2. Verify the number you'll be texting
-
-Trial accounts can only send to numbers you've verified in the console:
-
-1. Go to Phone Numbers → Manage → Verified Caller IDs.
-2. Add your own phone number and confirm it.
-3. Until you upgrade, only verified numbers can receive codes — fine for
-   testing with your own phone.
-
-## 3. Push this folder to GitHub
+## 1. Push this folder to GitHub
 
 ```
 cd otp-project
@@ -40,30 +23,32 @@ gh repo create otp-page --public --source=. --push
 
 (Or create a repo on github.com and push normally if you don't have `gh`.)
 
-## 4. Deploy on Vercel (free)
+## 2. Deploy on Vercel (free)
 
 1. Go to vercel.com → sign in with GitHub.
 2. "Add New Project" → import the `otp-page` repo.
-3. Before deploying, add these Environment Variables:
-   - `TWILIO_ACCOUNT_SID`
-   - `TWILIO_AUTH_TOKEN`
-   - `TWILIO_VERIFY_SERVICE_SID`
+3. Before deploying, add one Environment Variable:
+   - `OTP_SECRET` — any random long string (e.g. run
+     `openssl rand -hex 32` in a terminal)
 4. Click Deploy. `index.html` is served at the root, and `/api/send-otp`
    and `/api/verify-otp` run as serverless functions automatically.
 
-## How it works
+## The catch — read this before relying on it
 
-- `send-otp.js` calls Twilio Verify's `verifications.create` for the
-  phone number — Twilio generates the code, sends it, and tracks it
-  server-side for a few minutes.
-- `verify-otp.js` calls Verify's `verificationChecks.create` with the code
-  the user typed. Twilio checks it against what it sent and returns
-  `approved` or not.
-- No token, no code storage, no signing secret needed on our side at all —
-  Twilio is the source of truth for whether a code is correct.
+Textbelt's free tier (`key: "textbelt"`) allows **1 free text per phone
+number per day**, US numbers only, and it's a shared pool used by anyone
+on the internet who hits that same free key — so delivery isn't guaranteed
+and there's no support if it silently fails. It's genuinely fine for
+testing this yourself a few times a day. If you outgrow that, Textbelt
+sells a personal API key (a few dollars for dozens of texts) — you'd just
+set it as `TEXTBELT_KEY` in your environment variables and the code picks
+it up automatically, no other changes needed.
 
-## If a text doesn't arrive
+## How verification works
 
-- Confirm the number is added under Verified Caller IDs (step 2).
-- Check Verify → Services → [your service] → Logs in the Twilio Console —
-  it shows delivery status and the exact reason for any failure.
+- `send-otp.js` generates a 6-digit code, posts it to Textbelt to text it
+  out, and returns a signed token to the browser. The code itself is never
+  stored anywhere — it's folded into a hash inside that token.
+- `verify-otp.js` takes the code the user typed plus that token, recomputes
+  the same hash, and checks it matches and hasn't expired (5 minutes).
+- No database, no third-party account, nothing else to configure.

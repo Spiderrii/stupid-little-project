@@ -1,13 +1,22 @@
-const twilio = require('twilio');
+const crypto = require('crypto');
 
-// Twilio requires strict E.164: "+" + country code + digits, no spaces,
-// dashes, or parens. Normalize whatever the user typed into that shape.
+const CODE_TTL_SECONDS = 5 * 60; // 5 minutes
+
 function toE164(raw) {
   const digits = raw.replace(/\D/g, '');
-  if (digits.length === 10) return '+1' + digits;          // US, no country code typed
-  if (digits.length === 11 && digits[0] === '1') return '+' + digits; // US with leading 1
-  if (raw.trim().startsWith('+') && digits.length > 7) return '+' + digits; // already had a +
-  return null; // not enough digits to be a real number
+  if (digits.length === 10) return '+1' + digits;
+  if (digits.length === 11 && digits[0] === '1') return '+' + digits;
+  if (raw.trim().startsWith('+') && digits.length > 7) return '+' + digits;
+  return null;
+}
+
+// Builds a token that lets verify-otp check a submitted code against what
+// was actually texted, without the server storing the code anywhere.
+function buildToken(phone, code, exp, secret) {
+  const codeHash = crypto.createHash('sha256').update(`${phone}.${code}.${exp}.${secret}`).digest('hex');
+  const payload = `${phone}.${exp}.${codeHash}`;
+  const outerSig = crypto.createHmac('sha256', secret).update(payload).digest('hex');
+  return Buffer.from(`${phone}.${exp}.${codeHash}.${outerSig}`).toString('base64url');
 }
 
 module.exports = async (req, res) => {
@@ -24,32 +33,43 @@ module.exports = async (req, res) => {
 
   const normalizedPhone = toE164(phone);
   if (!normalizedPhone) {
-    res.status(400).json({ error: 'Enter a valid phone number, e.g. +1 555 010 1234.' });
+    res.status(400).json({ error: 'Enter a valid US phone number, e.g. +1 555 010 1234.' });
     return;
   }
 
-  const { TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_VERIFY_SERVICE_SID } = process.env;
-
-  if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN || !TWILIO_VERIFY_SERVICE_SID) {
+  const { OTP_SECRET, TEXTBELT_KEY } = process.env;
+  if (!OTP_SECRET) {
     res.status(500).json({ error: 'Server is missing required environment variables.' });
     return;
   }
 
+  const code = Math.floor(100000 + Math.random() * 900000).toString();
+  const exp = Date.now() + CODE_TTL_SECONDS * 1000;
+
   try {
-    const client = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
-    // Twilio Verify generates, stores, and sends the code itself using its
-    // own pre-approved verification template, then tracks it server-side
-    // against this phone number for a few minutes.
-    await client.verify.v2
-      .services(TWILIO_VERIFY_SERVICE_SID)
-      .verifications.create({ to: normalizedPhone, channel: 'sms' });
+    // 'textbelt' is a shared, no-signup key good for 1 free text per day
+    // per phone number. Set TEXTBELT_KEY as an env var later if you buy
+    // your own key for more volume — no code changes needed.
+    const resp = await fetch('https://textbelt.com/text', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        phone: normalizedPhone,
+        message: `Your verification code is ${code}. It expires in 5 minutes.`,
+        key: TEXTBELT_KEY || 'textbelt'
+      })
+    });
+    const data = await resp.json();
+    if (!data.success) {
+      throw new Error(data.error || 'Textbelt could not send the message.');
+    }
   } catch (err) {
     res.status(502).json({ error: 'Could not send the text: ' + (err.message || 'unknown error') });
     return;
   }
 
-  // No code or token to hand back — Verify tracks the pending code by
-  // phone number on Twilio's side. We just tell the client which
-  // normalized phone number to check against later.
-  res.status(200).json({ phone: normalizedPhone });
+  res.status(200).json({
+    token: buildToken(normalizedPhone, code, exp, OTP_SECRET),
+    phone: normalizedPhone
+  });
 };

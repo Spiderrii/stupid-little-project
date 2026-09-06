@@ -1,39 +1,73 @@
-const twilio = require('twilio');
+const crypto = require('crypto');
 
-module.exports = async (req, res) => {
+module.exports = (req, res) => {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method not allowed' });
     return;
   }
 
-  const { phone, code } = req.body || {};
-  if (!phone || !code) {
-    res.status(400).json({ success: false, error: 'Missing phone or code.' });
-    return;
-  }
+  const { phone, code, token } = req.body || {};
+  const { OTP_SECRET } = process.env;
 
-  const { TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_VERIFY_SERVICE_SID } = process.env;
-
-  if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN || !TWILIO_VERIFY_SERVICE_SID) {
+  if (!OTP_SECRET) {
     res.status(500).json({ error: 'Server is missing required environment variables.' });
     return;
   }
-
-  try {
-    const client = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
-    const check = await client.verify.v2
-      .services(TWILIO_VERIFY_SERVICE_SID)
-      .verificationChecks.create({ to: phone, code });
-
-    if (check.status === 'approved') {
-      res.status(200).json({ success: true });
-    } else {
-      res.status(200).json({ success: false, error: 'Incorrect code.' });
-    }
-  } catch (err) {
-    // Twilio throws (rather than returning a check result) for cases like
-    // an expired/already-used verification — treat those as "incorrect"
-    // rather than a server error.
-    res.status(200).json({ success: false, error: 'Incorrect or expired code.' });
+  if (!phone || !code || !token) {
+    res.status(400).json({ success: false, error: 'Missing phone, code, or token.' });
+    return;
   }
+
+  let decoded;
+  try {
+    decoded = Buffer.from(token, 'base64url').toString('utf8');
+  } catch (err) {
+    res.status(400).json({ success: false, error: 'Invalid token.' });
+    return;
+  }
+
+  const parts = decoded.split('.');
+  if (parts.length !== 4) {
+    res.status(400).json({ success: false, error: 'Invalid token.' });
+    return;
+  }
+  const [tokenPhone, expStr, codeHash, outerSig] = parts;
+  const exp = Number(expStr);
+
+  if (tokenPhone !== phone) {
+    res.status(400).json({ success: false, error: 'Token does not match this phone number.' });
+    return;
+  }
+  if (!exp || Date.now() > exp) {
+    res.status(400).json({ success: false, error: 'Code has expired.' });
+    return;
+  }
+
+  const expectedOuterSig = crypto
+    .createHmac('sha256', OTP_SECRET)
+    .update(`${tokenPhone}.${exp}.${codeHash}`)
+    .digest('hex');
+  if (!timingSafeEqual(outerSig, expectedOuterSig)) {
+    res.status(400).json({ success: false, error: 'Invalid token.' });
+    return;
+  }
+
+  const expectedCodeHash = crypto
+    .createHash('sha256')
+    .update(`${phone}.${code}.${exp}.${OTP_SECRET}`)
+    .digest('hex');
+
+  if (!timingSafeEqual(codeHash, expectedCodeHash)) {
+    res.status(200).json({ success: false, error: 'Incorrect code.' });
+    return;
+  }
+
+  res.status(200).json({ success: true });
 };
+
+function timingSafeEqual(a, b) {
+  const bufA = Buffer.from(a, 'hex');
+  const bufB = Buffer.from(b, 'hex');
+  if (bufA.length !== bufB.length) return false;
+  return crypto.timingSafeEqual(bufA, bufB);
+}
