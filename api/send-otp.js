@@ -1,7 +1,10 @@
 const crypto = require('crypto');
-const twilio = require('twilio');
+const nodemailer = require('nodemailer');
 
 const CODE_TTL_SECONDS = 5 * 60; // 5 minutes
+
+// AT&T's email-to-SMS gateway. Change this if you switch carriers later.
+const CARRIER_GATEWAY = 'txt.att.net';
 
 // Builds a token that lets verify-otp check a submitted code against what
 // was actually texted, without the server storing the code anywhere.
@@ -24,27 +27,33 @@ module.exports = async (req, res) => {
     return;
   }
 
-  const {
-    TWILIO_ACCOUNT_SID,
-    TWILIO_AUTH_TOKEN,
-    TWILIO_PHONE_NUMBER,
-    OTP_SECRET
-  } = process.env;
+  const { GMAIL_USER, GMAIL_APP_PASSWORD, OTP_SECRET } = process.env;
 
-  if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN || !TWILIO_PHONE_NUMBER || !OTP_SECRET) {
+  if (!GMAIL_USER || !GMAIL_APP_PASSWORD || !OTP_SECRET) {
     res.status(500).json({ error: 'Server is missing required environment variables.' });
     return;
   }
+
+  const digits = phone.replace(/\D/g, '').slice(-10); // last 10 digits, no +1/formatting
+  if (digits.length !== 10) {
+    res.status(400).json({ error: 'Enter a 10-digit US phone number.' });
+    return;
+  }
+  const gatewayAddress = `${digits}@${CARRIER_GATEWAY}`;
 
   const code = Math.floor(100000 + Math.random() * 900000).toString(); // 6 digits
   const exp = Date.now() + CODE_TTL_SECONDS * 1000;
 
   try {
-    const client = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
-    await client.messages.create({
-      body: `Your verification code is ${code}. It expires in 5 minutes.`,
-      from: TWILIO_PHONE_NUMBER,
-      to: phone
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: { user: GMAIL_USER, pass: GMAIL_APP_PASSWORD }
+    });
+    await transporter.sendMail({
+      from: GMAIL_USER,
+      to: gatewayAddress,
+      subject: '', // carrier gateways usually ignore/strip this
+      text: `Your verification code is ${code}. It expires in 5 minutes.`
     });
   } catch (err) {
     res.status(502).json({ error: 'Could not send the text: ' + (err.message || 'unknown error') });
