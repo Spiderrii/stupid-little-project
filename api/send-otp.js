@@ -4,7 +4,7 @@ const nodemailer = require('nodemailer');
 const CODE_TTL_SECONDS = 5 * 60; // 5 minutes
 
 // AT&T's email-to-SMS gateway. Change this if you switch carriers later.
-const CARRIER_GATEWAY = 'email.uscc.net';
+const CARRIER_GATEWAY = 'sms.myboostmobile.com';
 
 // Builds a token that lets verify-otp check a submitted code against what
 // was actually texted, without the server storing the code anywhere.
