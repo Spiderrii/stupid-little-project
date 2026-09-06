@@ -2,7 +2,5 @@
   "name": "otp-page",
   "version": "1.0.0",
   "private": true,
-  "dependencies": {
-    "nodemailer": "^6.9.14"
-  }
+  "dependencies": {}
 }
