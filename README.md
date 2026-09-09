@@ -1,54 +1,42 @@
-# OTP page — setup (phone + email switch)
+# OTP page — phone simulated, email real
 
-A verification page (`index.html`) with a pill switch to toggle between
-texting a code (via Textbelt's free tier) or emailing one (via Resend),
-plus two backend functions (`api/send-otp.js`, `api/verify-otp.js`) that
-branch on whichever channel was picked.
+The phone/email switch stays, but now behaves differently per channel:
 
-## Environment variables
+- **Phone**: still fully simulated, client-side only. No account, no
+  server call, no real text sent. The code shown in the toast is the
+  actual (fake) code used for verification.
+- **Email**: actually sends, through Resend, using a proper HTML template
+  (subject line, boxed code, "ignore if you didn't request this" note —
+  looks like a real product email, not a plain-text notice). The toast
+  still shows the code too, as a convenience — the server hands it back
+  in the response for exactly that reason. See the comment in
+  `api/send-otp.js` if this ever needs to become a real (non-demo)
+  verification flow — that's the one field to remove.
 
-- `OTP_SECRET` — required always. Any random long string you make up
-  (e.g. run `openssl rand -hex 32` in a terminal). Used only to sign the
-  verification token — nothing else needs it.
-- `RESEND_API_KEY` — required for the email channel to work. Sign up at
-  resend.com (no phone/card needed), grab a key under API Keys. Note the
-  sandbox sender (`onboarding@resend.dev`) only delivers to the address
-  you signed up to Resend with, until you verify your own domain.
-- `TEXTBELT_KEY` — optional, for the phone channel. Leave unset to use
-  the free shared key (1 text/day per number, no signup, not
-  guaranteed to deliver). Set your own paid key here later for more
-  reliable/volume texting — no code changes needed.
+## Environment variables (only needed for the email channel)
 
-If a channel's key is missing or wrong, that channel will error when
-used, but the other one still works fine — they're independent.
+- `RESEND_API_KEY` — sign up at resend.com (no phone/card needed), create
+  a key under API Keys.
+- `OTP_SECRET` — any random long string you make up (e.g.
+  `openssl rand -hex 32`). Signs the verification token.
 
-## Push this folder to GitHub
+Note: Resend's sandbox sender (`onboarding@resend.dev`) only delivers to
+the address you signed up to Resend with, until you verify a domain.
+
+## Deploy
 
 ```
 cd otp-project
 git init
 git add .
-git commit -m "otp page with phone/email switch"
+git commit -m "otp page: real email, simulated phone"
 gh repo create otp-page --public --source=. --push
 ```
 
-## Deploy on Vercel (free)
+Then on vercel.com: Add New Project → import the repo → add the two env
+vars above → Deploy. `index.html` is served at the root; `/api/send-otp`
+and `/api/verify-otp` run as serverless functions automatically.
 
-1. vercel.com → sign in with GitHub → Add New Project → import the repo.
-2. Add whichever of the environment variables above you're using.
-3. Deploy. `index.html` is served at the root, `/api/send-otp` and
-   `/api/verify-otp` run as serverless functions automatically.
-
-## How it works
-
-- The switch just changes local UI state (`mode`) and which input is
-  shown — the animation is a sliding `.mode-thumb` div with a springy
-  cubic-bezier transition.
-- Both modes post to the same two endpoints with a `channel` field
-  (`"phone"` or `"email"`) plus `contact` (the phone number or email
-  typed in). `send-otp.js` branches on that to decide whether to call
-  Textbelt or Resend.
-- Verification is identical either way: a signed token (not the code
-  itself) comes back from `send-otp`, and `verify-otp` recomputes the
-  same hash from what the user typed to check it matches and hasn't
-  expired (5 minutes). No database needed.
+If you just want to see the page (switch animation, dark mode, the fake
+phone flow) without deploying anything, open `index.html` directly in a
+browser — only the email "Send code" button needs the live backend.
