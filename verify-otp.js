@@ -6,15 +6,15 @@ module.exports = (req, res) => {
     return;
   }
 
-  const { email, code, token } = req.body || {};
+  const { contact, code, token } = req.body || {};
   const { OTP_SECRET } = process.env;
 
   if (!OTP_SECRET) {
     res.status(500).json({ error: 'Server is missing required environment variables.' });
     return;
   }
-  if (!email || !code || !token) {
-    res.status(400).json({ success: false, error: 'Missing email, code, or token.' });
+  if (!contact || !code || !token) {
+    res.status(400).json({ success: false, error: 'Missing contact, code, or token.' });
     return;
   }
 
@@ -31,11 +31,11 @@ module.exports = (req, res) => {
     res.status(400).json({ success: false, error: 'Invalid token.' });
     return;
   }
-  const [tokenEmail, expStr, codeHash, outerSig] = parts;
+  const [tokenContact, expStr, codeHash, outerSig] = parts;
   const exp = Number(expStr);
 
-  if (tokenEmail !== email) {
-    res.status(400).json({ success: false, error: 'Token does not match this email address.' });
+  if (tokenContact !== contact) {
+    res.status(400).json({ success: false, error: 'Token does not match this contact info.' });
     return;
   }
   if (!exp || Date.now() > exp) {
@@ -45,7 +45,7 @@ module.exports = (req, res) => {
 
   const expectedOuterSig = crypto
     .createHmac('sha256', OTP_SECRET)
-    .update(`${tokenEmail}.${exp}.${codeHash}`)
+    .update(`${tokenContact}.${exp}.${codeHash}`)
     .digest('hex');
   if (!timingSafeEqual(outerSig, expectedOuterSig)) {
     res.status(400).json({ success: false, error: 'Invalid token.' });
@@ -54,7 +54,7 @@ module.exports = (req, res) => {
 
   const expectedCodeHash = crypto
     .createHash('sha256')
-    .update(`${email}.${code}.${exp}.${OTP_SECRET}`)
+    .update(`${contact}.${code}.${exp}.${OTP_SECRET}`)
     .digest('hex');
 
   if (!timingSafeEqual(codeHash, expectedCodeHash)) {

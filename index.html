@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Verify your email</title>
+<title>Verify</title>
 <style>
   :root {
     --bg: #ffffff;
@@ -47,7 +47,7 @@
   p.sub {
     font-size: 14px;
     color: var(--text-dim);
-    margin: 0 0 28px;
+    margin: 0 0 24px;
     line-height: 1.5;
   }
 
@@ -58,7 +58,70 @@
     margin-bottom: 8px;
   }
 
-  input[type="email"] {
+  /* --- mode switch --- */
+  .mode-switch {
+    position: relative;
+    display: flex;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    padding: 3px;
+    margin-bottom: 24px;
+    height: 40px;
+  }
+
+  .mode-thumb {
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: calc(50% - 3px);
+    height: calc(100% - 6px);
+    background: var(--text);
+    transition: transform 0.38s cubic-bezier(0.34, 1.56, 0.64, 1);
+    will-change: transform;
+  }
+
+  .mode-switch[data-mode="email"] .mode-thumb {
+    transform: translateX(100%);
+  }
+
+  .mode-option {
+    position: relative;
+    z-index: 1;
+    flex: 1;
+    background: none;
+    border: none;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-dim);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    transition: color 0.25s ease;
+  }
+
+  .mode-option.active {
+    color: #ffffff;
+  }
+
+  .mode-option svg {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    transition: transform 0.38s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .mode-option.active svg {
+    transform: scale(1.1);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .mode-thumb, .mode-option svg { transition: none; }
+  }
+
+  input[type="email"], input[type="tel"] {
     width: 100%;
     border: 1px solid var(--border);
     background: var(--surface);
@@ -69,9 +132,12 @@
     font-family: inherit;
   }
 
-  input[type="email"]:focus {
+  input[type="email"]:focus, input[type="tel"]:focus {
     border-color: var(--text);
   }
+
+  .contact-field { display: none; }
+  .contact-field.active { display: block; }
 
   button.primary {
     width: 100%;
@@ -170,18 +236,38 @@
 
 <div class="card">
 
-  <div class="screen active fade-in" id="screenEmail">
-    <h1>Verify your email</h1>
-    <p class="sub">We'll email you a 6-digit code.</p>
-    <label for="email">Email address</label>
-    <input type="email" id="email" placeholder="you@example.com" autocomplete="email">
+  <div class="screen active fade-in" id="screenContact">
+    <h1 id="contactTitle">Verify your phone</h1>
+    <p class="sub" id="contactSub">We'll text you a 6-digit code.</p>
+
+    <div class="mode-switch" id="modeSwitch" data-mode="phone">
+      <div class="mode-thumb"></div>
+      <button class="mode-option active" id="modePhoneBtn" data-mode="phone" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.362 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.338 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+        Phone
+      </button>
+      <button class="mode-option" id="modeEmailBtn" data-mode="email" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z" opacity="0"/><path d="M22 6c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6zm-2 0-8 5-8-5"/></svg>
+        Email
+      </button>
+    </div>
+
+    <div class="contact-field active" id="fieldPhone">
+      <label for="phone">Phone number</label>
+      <input type="tel" id="phone" placeholder="+1 555 010 1234" autocomplete="tel">
+    </div>
+    <div class="contact-field" id="fieldEmail">
+      <label for="email">Email address</label>
+      <input type="email" id="email" placeholder="you@example.com" autocomplete="email">
+    </div>
+
     <button class="primary" id="sendBtn">Send code</button>
-    <div class="status" id="emailStatus"></div>
+    <div class="status" id="contactStatus"></div>
   </div>
 
   <div class="screen" id="screenCode">
     <h1>Enter your code</h1>
-    <p class="sub" id="sentTo">We sent a code to your email.</p>
+    <p class="sub" id="sentTo">We sent a code.</p>
     <div class="code-row" id="codeRow">
       <input type="text" inputmode="numeric" maxlength="1">
       <input type="text" inputmode="numeric" maxlength="1">
@@ -193,7 +279,7 @@
     <button class="primary" id="verifyBtn">Verify</button>
     <div class="row-between">
       <button class="link-btn" id="resendBtn">Resend code</button>
-      <button class="link-btn" id="backBtn">Change email</button>
+      <button class="link-btn" id="backBtn">Change contact info</button>
     </div>
     <div class="status" id="codeStatus"></div>
   </div>
@@ -202,11 +288,19 @@
 
 <script>
 (function () {
-  const screenEmail = document.getElementById('screenEmail');
+  const screenContact = document.getElementById('screenContact');
   const screenCode = document.getElementById('screenCode');
+  const modeSwitch = document.getElementById('modeSwitch');
+  const modePhoneBtn = document.getElementById('modePhoneBtn');
+  const modeEmailBtn = document.getElementById('modeEmailBtn');
+  const contactTitle = document.getElementById('contactTitle');
+  const contactSub = document.getElementById('contactSub');
+  const fieldPhone = document.getElementById('fieldPhone');
+  const fieldEmail = document.getElementById('fieldEmail');
+  const phoneInput = document.getElementById('phone');
   const emailInput = document.getElementById('email');
   const sendBtn = document.getElementById('sendBtn');
-  const emailStatus = document.getElementById('emailStatus');
+  const contactStatus = document.getElementById('contactStatus');
   const sentTo = document.getElementById('sentTo');
   const codeInputs = Array.from(document.querySelectorAll('#codeRow input'));
   const verifyBtn = document.getElementById('verifyBtn');
@@ -214,13 +308,36 @@
   const backBtn = document.getElementById('backBtn');
   const codeStatus = document.getElementById('codeStatus');
 
-  let currentEmail = "";
+  let mode = 'phone'; // 'phone' | 'email'
+  let currentContact = "";
   let currentToken = "";
   let resendCooldown = 0;
   let resendTimer = null;
 
+  const COPY = {
+    phone: { title: 'Verify your phone', sub: "We'll text you a 6-digit code.", placeholder: 'Enter a phone number.' },
+    email: { title: 'Verify your email', sub: "We'll email you a 6-digit code.", placeholder: 'Enter an email address.' }
+  };
+
+  function setMode(next) {
+    if (next === mode) return;
+    mode = next;
+    modeSwitch.setAttribute('data-mode', mode);
+    modePhoneBtn.classList.toggle('active', mode === 'phone');
+    modeEmailBtn.classList.toggle('active', mode === 'email');
+    fieldPhone.classList.toggle('active', mode === 'phone');
+    fieldEmail.classList.toggle('active', mode === 'email');
+    contactTitle.textContent = COPY[mode].title;
+    contactSub.textContent = COPY[mode].sub;
+    setStatus(contactStatus, '', null);
+    (mode === 'phone' ? phoneInput : emailInput).focus();
+  }
+
+  modePhoneBtn.addEventListener('click', () => setMode('phone'));
+  modeEmailBtn.addEventListener('click', () => setMode('email'));
+
   function showScreen(el) {
-    [screenEmail, screenCode].forEach(s => s.classList.remove('active', 'fade-in'));
+    [screenContact, screenCode].forEach(s => s.classList.remove('active', 'fade-in'));
     el.classList.add('active', 'fade-in');
   }
 
@@ -229,39 +346,43 @@
     el.className = 'status' + (kind ? ' ' + kind : '');
   }
 
+  function currentInputValue() {
+    return (mode === 'phone' ? phoneInput : emailInput).value.trim();
+  }
+
   async function sendCode(isResend) {
-    const email = emailInput.value.trim();
     if (!isResend) {
-      if (!email) {
-        setStatus(emailStatus, 'Enter an email address.', 'error');
+      const value = currentInputValue();
+      if (!value) {
+        setStatus(contactStatus, COPY[mode].placeholder, 'error');
         return;
       }
-      currentEmail = email;
+      currentContact = value;
     }
     sendBtn.disabled = true;
     resendBtn.disabled = true;
-    setStatus(emailStatus, 'Sending...', null);
+    setStatus(contactStatus, 'Sending...', null);
     setStatus(codeStatus, '', null);
     try {
       const res = await fetch('/api/send-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: currentEmail })
+        body: JSON.stringify({ channel: mode, contact: currentContact })
       });
       const data = await res.json();
       if (!res.ok || !data.token) {
         throw new Error(data.error || 'Could not send code.');
       }
       currentToken = data.token;
-      if (data.email) currentEmail = data.email;
-      sentTo.textContent = 'We sent a code to ' + currentEmail + '.';
+      if (data.contact) currentContact = data.contact;
+      sentTo.textContent = 'We sent a code to ' + currentContact + '.';
       codeInputs.forEach(i => i.value = '');
       showScreen(screenCode);
       codeInputs[0].focus();
       setStatus(codeStatus, '', null);
       startResendCooldown();
     } catch (err) {
-      setStatus(emailStatus, err.message, 'error');
+      setStatus(contactStatus, err.message, 'error');
     } finally {
       sendBtn.disabled = false;
     }
@@ -289,10 +410,11 @@
   }
 
   sendBtn.addEventListener('click', () => sendCode(false));
+  phoneInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendCode(false); });
   emailInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendCode(false); });
   resendBtn.addEventListener('click', () => { if (!resendBtn.disabled) sendCode(true); });
   backBtn.addEventListener('click', () => {
-    showScreen(screenEmail);
+    showScreen(screenContact);
     setStatus(codeStatus, '', null);
   });
 
@@ -331,7 +453,7 @@
       const res = await fetch('/api/verify-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: currentEmail, code, token: currentToken })
+        body: JSON.stringify({ contact: currentContact, code, token: currentToken })
       });
       const data = await res.json();
       if (data.success) {
